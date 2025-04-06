@@ -5,13 +5,15 @@ import threading
 from CTkMessagebox import CTkMessagebox
 import customtkinter
 from CTkListbox import *
-HEADER = 256
+HEADER = 1024
 PORT = 5051
 FORMAT = 'UTF-8'
 DISCONNECT_MESSAGE = "/DISCONNECT"
 SERVER = "127.0.0.1"
 ADDR = (SERVER, PORT)
 class GUI:
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(ADDR)
     def __init__(self):
         self.window = None
         self.qr_window = None
@@ -26,11 +28,10 @@ class GUI:
         self.client.close()
         self.window.destroy()
 
+
     def setup(self):
         if self.window is None:
             self.window = customtkinter.CTk()
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect(ADDR)
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.window.geometry('500x500')
@@ -64,10 +65,10 @@ class Login(GUI):
 
     def handle_login(self, user_id, password):
         self.client.send(user_id.encode(FORMAT))
-        status=self.client.recv(256).decode(FORMAT)
+        status=self.client.recv(HEADER).decode(FORMAT)
         if status == "200":
             self.client.send(hashlib.sha256(password.encode()).hexdigest().encode(FORMAT))
-            status=self.client.recv(1024).decode(FORMAT)
+            status=self.client.recv(HEADER).decode(FORMAT)
             if status == "200":
                     self.frame.place_forget()
                     self.frameText.place_forget()
@@ -83,7 +84,6 @@ class Chat(GUI):
         self.window = existing_window
         self.setup()
         self.username = username
-
         self.online_users = []
         self.msg_list = None
         self.receive_thread = None
@@ -115,7 +115,7 @@ class Chat(GUI):
         if og_message:
             send_message=""
             if self.category.get()!="All":
-                send_message="@"+self.category.get()+" "+og_message
+                send_message=self.category.get()+" "+og_message
             elif self.category.get() == 'All':
                 send_message="!"+" "+og_message
             self.client.send(send_message.encode(FORMAT))
@@ -128,7 +128,7 @@ class Chat(GUI):
     def receive(self):
         while True:
             try:
-                message = self.client.recv(1024).decode(FORMAT)
+                message = self.client.recv(HEADER).decode(FORMAT)
 
                 if message.startswith("USER_LIST:"):
                     online_users = message[len("USER_LIST:"):]
@@ -142,9 +142,10 @@ class Chat(GUI):
                 break
     def update_user_list(self, online_users):
         users = online_users.split("\n")
-        users[0]="All"
+        users.remove("@"+self.username)
+        updated_users = ["All"]+[user.strip() for user in users if user.strip()]
         current_user=self.category.get()
-        self.online_users = users
+        self.online_users = updated_users
         self.category.configure(values=self.online_users)
         self.category.set(self.online_users[0])
         if current_user in self.online_users:

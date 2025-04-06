@@ -1,7 +1,7 @@
 import socket
 import threading
-from database import check_user
-HEADER = 64
+from database import check_user,login,group_members,groups
+HEADER = 1024
 PORT = 5051
 SERVER = "127.0.0.1"
 ADDR = (SERVER, PORT)
@@ -9,24 +9,24 @@ FORMAT = 'UTF-8'
 DISCONNECT_MESSAGE = "DISCONNECT"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
-clients = {} #riyan -> conn || saad --> conn
+clients = {} #user-->connection
 
 def authenticate(conn):
-    username = conn.recv(1024).decode()
-    username_check=check_user(username)
-    if username_check:
-        conn.send(b"200") #correct username
-        password = conn.recv(1024).decode()
-        if password:
-            conn.send(b"200") #correct password
-            clients[username] = conn
-            return username
+    while True:
+        username = conn.recv(HEADER).decode()
+        username_check=check_user(username)
+        if username_check:
+            conn.send(b"200") #correct username
+            password = conn.recv(HEADER).decode()
+            check_password =login(username,password)
+            if check_password:
+                conn.send(b"200") #correct password
+                clients[username] = conn
+                return username
+            else:
+                conn.send(b"401") #incorrect password
         else:
-            conn.send(b"401") #incorrect password
-            return None
-    else:
-        conn.send(b"404") #incorrect username
-        return None
+            conn.send(b"404") #incorrect username
 
 def unicast(oguser, user, msg):
     if user in clients:
@@ -38,9 +38,18 @@ def unicast(oguser, user, msg):
 
 
 def broadcast(user, msg2):
+    msg2=f"[BROADCAST] {user}: {msg2}"
     for client in clients:
-        msg2=f"[BROADCAST] {user}: {msg2}"
         clients[client].send(msg2.encode(FORMAT))
+
+
+def multicast(group, msg2,oguser):
+    group_names=group_members(group)
+    print(group)
+    msg2 =f'#{group} {oguser}: {msg2}'
+    for user in group_names:
+        if user != oguser and user in clients:
+            clients[user].send(msg2.encode(FORMAT))
 
 
 def handle_client(conn, addr):
@@ -50,16 +59,22 @@ def handle_client(conn, addr):
         connected = True
         try:
             while connected:
-                    msg = conn.recv(1024).decode()
+                    msg = conn.recv(HEADER).decode()
                     if msg[0] == "@": #unicast
                         user2, msg2 = msg[1:].split(" ", 1)
                         unicast(user, user2, msg2)
                     elif msg[0] == "!": #broadcast
                         u,msg2 = msg[1:].split(" ", 1)
                         broadcast(user, msg2)
+                    elif msg[0] == "#":
+                        u,msg2=msg[1:].split(" ", 1)
+                        multicast(u, msg2,user)
                     elif msg == "/list":
-                        online_clients = "\n".join(clients.keys())
-                        conn.send(f"USER_LIST:\n{online_clients}".encode(FORMAT))
+                        user_list = [f"@{u}" for u in clients.keys()]
+                        user_groups = groups(user)
+                        group_list = ["#" + g for g in user_groups] if user_groups else []
+                        combined = "\n".join(user_list + group_list)
+                        conn.send(f"USER_LIST:\n{combined}".encode(FORMAT))
                     if msg == DISCONNECT_MESSAGE:
                         connected = False
         except Exception as e:
