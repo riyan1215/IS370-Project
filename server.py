@@ -1,6 +1,6 @@
 import socket
 import threading
-from database import login,check_user
+from database import check_user
 HEADER = 64
 PORT = 5051
 SERVER = "127.0.0.1"
