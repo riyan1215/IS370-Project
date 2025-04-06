@@ -1,7 +1,6 @@
 import socket
 import sys
 import threading
-
 HEADER = 256
 PORT = 5051
 FORMAT = 'UTF-8'
