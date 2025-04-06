@@ -1,7 +1,7 @@
 import hashlib
 import sqlite3
 
-conn=sqlite3.connect('user.db')
+conn=sqlite3.connect('user.db',check_same_thread=False)
 cursor=conn.cursor()
 conn.execute('''
 CREATE TABLE IF NOT EXISTS users (
@@ -27,7 +27,12 @@ def login(username,password):
         return False
     except Exception as e:
         print("Login failed "+str(e))
-
-print(login("riyan",hashlib.sha256("1212".encode()).hexdigest())
-)
+def check_user(username):
+    try:
+        db_username = cursor.execute("select username from users where username = ?",(username,)).fetchone()[0]
+        if db_username == username:
+            return True
+        return False
+    except Exception as e:
+        return False
 conn.commit()

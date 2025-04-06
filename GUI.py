@@ -2,17 +2,15 @@ import hashlib
 import socket
 import textwrap
 import threading
-import tkinter
-from database import login
+from CTkMessagebox import CTkMessagebox
 import customtkinter
 from CTkListbox import *
 HEADER = 256
 PORT = 5051
 FORMAT = 'UTF-8'
-DISCONNECT_MESSAGE = "!DISCONNECT"
+DISCONNECT_MESSAGE = "/DISCONNECT"
 SERVER = "127.0.0.1"
 ADDR = (SERVER, PORT)
-
 class GUI:
     def __init__(self):
         self.window = None
@@ -20,10 +18,21 @@ class GUI:
         self.map_window = None
         self.frame = None
         self.frameText = None
+    def on_exit(self):
+        try:
+            self.client.send(DISCONNECT_MESSAGE.encode(FORMAT))
+        except:
+            pass
+        self.client.close()
+        self.window.destroy()
 
     def setup(self):
         if self.window is None:
             self.window = customtkinter.CTk()
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client.connect(ADDR)
+
+        self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.window.geometry('500x500')
         self.window.configure(bg="#252424")
         self.window.title("Chat Application")
@@ -54,20 +63,27 @@ class Login(GUI):
 
 
     def handle_login(self, user_id, password):
-        login_result = login(user_id, hashlib.sha256(password.encode()).hexdigest())
-        if login_result:
-            self.frame.place_forget()
-            self.frameText.place_forget()
-            Chat(self.window,user_id)
+        self.client.send(user_id.encode(FORMAT))
+        status=self.client.recv(256).decode(FORMAT)
+        if status == "200":
+            self.client.send(hashlib.sha256(password.encode()).hexdigest().encode(FORMAT))
+            status=self.client.recv(1024).decode(FORMAT)
+            if status == "200":
+                    self.frame.place_forget()
+                    self.frameText.place_forget()
+                    Chat(self.window, user_id,self.client)
+            else:
+                CTkMessagebox(title="Error", message="Password Incorrect!!!", icon="cancel")
+        else:
+            CTkMessagebox(title="Error", message="Username Incorrect!!!", icon="cancel")
+
 class Chat(GUI):
-    def __init__(self,existing_window,username):
+    def __init__(self,existing_window,username,client):
         super().__init__()
         self.window = existing_window
         self.setup()
         self.username = username
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.connect(ADDR)
-        self.client.send(username.encode(FORMAT))
+
         self.online_users = []
         self.msg_list = None
         self.receive_thread = None
@@ -78,13 +94,13 @@ class Chat(GUI):
         self.frame.place(x=170, y=250)
         self.frameText.place(x=25, y=380)
         self.msg_list =CTkListbox(self.frame, height=350,width=400)
-        self.msg_list.pack(side=tkinter.LEFT, fill=customtkinter.BOTH)
+        self.msg_list.pack(side=customtkinter.LEFT, fill=customtkinter.BOTH)
         self.category = customtkinter.CTkOptionMenu(master=self.frameText, values=self.online_users, width=30,corner_radius=3)
-        self.category.pack(side=tkinter.LEFT, fill=customtkinter.X)
+        self.category.pack(side=customtkinter.LEFT, fill=customtkinter.X)
         entry = customtkinter.CTkEntry(master=self.frameText, textvariable=self.my_msg, width=300, placeholder_text="Type a message")
-        entry.pack(side=tkinter.LEFT, padx=(10, 10), pady=(10, 10))
+        entry.pack(side=customtkinter.LEFT, padx=(10, 10), pady=(10, 10))
         send_button = customtkinter.CTkButton(master=self.frameText, text="Send", width=60, command=self.send_message,corner_radius=3)
-        send_button.pack(side=tkinter.LEFT, pady=(10, 10))
+        send_button.pack(side=customtkinter.LEFT, pady=(10, 10))
         self.receive_thread = threading.Thread(target=self.receive, daemon=True)
         self.receive_thread.start()
         self.refresh_user_list()
@@ -118,7 +134,7 @@ class Chat(GUI):
                     online_users = message[len("USER_LIST:"):]
                     self.update_user_list(online_users)
                 else:
-                    self.msg_list.insert(tkinter.END, f"{message}")
+                    self.msg_list.insert(customtkinter.END, f"{message}")
                     self.msg_list._parent_canvas.yview_moveto(1.0)
             except Exception as e:
                 print(f"An error occurred: {e}")
