@@ -6,7 +6,7 @@ PORT = 5051
 SERVER = "127.0.0.1"
 ADDR = (SERVER, PORT)
 FORMAT = 'UTF-8'
-DISCONNECT_MESSAGE = "DISCONNECT"
+DISCONNECT_MESSAGE = "/DISCONNECT"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 clients = {} #user-->connection

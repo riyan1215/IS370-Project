@@ -15,19 +15,24 @@ class GUI:
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(ADDR)
     def __init__(self):
+        self.thread_running = True
         self.window = None
         self.qr_window = None
         self.map_window = None
         self.frame = None
         self.frameText = None
     def on_exit(self):
+        self.thread_running = False  # stop receive thread
         try:
             self.client.send(DISCONNECT_MESSAGE.encode(FORMAT))
         except:
             pass
-        self.client.close()
-        self.window.destroy()
-
+        try:
+            self.client.close()
+        except:
+            pass
+        if self.window:
+            self.window.destroy()
 
     def setup(self):
         if self.window is None:
@@ -39,9 +44,6 @@ class GUI:
         self.window.title("Chat Application")
         self.frame = customtkinter.CTkFrame(self.window, fg_color='transparent')
         self.frameText = customtkinter.CTkFrame(self.window, fg_color='transparent')
-    def destroy(self):
-        if self.window is not None:
-            self.window.destroy()
 
 
 class Login(GUI):
@@ -87,7 +89,6 @@ class Chat(GUI):
         self.online_users = []
         self.msg_list = None
         self.receive_thread = None
-        self.send_thread = None
         self.my_msg = customtkinter.StringVar()
         self.chat()
     def chat(self):
@@ -105,7 +106,6 @@ class Chat(GUI):
         self.receive_thread.start()
         self.refresh_user_list()
         self.frame.pack(pady=(0, 10))
-        self.window.mainloop()
 
     def on_user_select(self, selected):
         self.selected_user = selected
@@ -119,27 +119,40 @@ class Chat(GUI):
             elif self.category.get() == 'All':
                 send_message="!"+" "+og_message
             self.client.send(send_message.encode(FORMAT))
-            if self.category.get() != "All":
+            if self.category.get()[0]=="@":
                 self.msg_list.insert(customtkinter.END, "You:"+ textwrap.fill(og_message,45))
+            elif self.category.get()[0]=="#":
+                self.msg_list.insert(customtkinter.END, f"{self.category.get().removeprefix("'").removesuffix("'")} You:"+ textwrap.fill(og_message,45))
             self.my_msg.set("")
-            self.msg_list._parent_canvas.yview_moveto(1.0)
-
+            try:
+                self.msg_list._parent_canvas.yview_moveto(1.0)
+            except Exception as e:
+                print("Scroll failed (likely on exit):", e)
 
     def receive(self):
-        while True:
+        while self.thread_running:
             try:
                 message = self.client.recv(HEADER).decode(FORMAT)
+                if not self.window or not self.window.winfo_exists():
+                    break
+                if not hasattr(self, "msg_list") or not self.msg_list.winfo_exists():
+                    break
 
                 if message.startswith("USER_LIST:"):
                     online_users = message[len("USER_LIST:"):]
                     self.update_user_list(online_users)
                 else:
                     self.msg_list.insert(customtkinter.END, f"{message}")
-                    self.msg_list._parent_canvas.yview_moveto(1.0)
+                    try:
+                        if hasattr(self.msg_list, "_parent_canvas"):
+                            self.msg_list._parent_canvas.yview_moveto(1.0)
+                    except Exception as e:
+                        print("Scroll error:", e)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                self.client.close()
+                if self.thread_running:  # only show error if it's unexpected
+                    print(f"An error occurred: {e}")
                 break
+
     def update_user_list(self, online_users):
         users = online_users.split("\n")
         users.remove("@"+self.username)
@@ -152,7 +165,7 @@ class Chat(GUI):
             self.category.set(current_user)
     def refresh_user_list(self):
         message = "/list"
-        if message:
+        if message and self.thread_running:
             self.client.send(message.encode(FORMAT))
         self.window.after(5000, self.refresh_user_list)
 if __name__ == "__main__":
