@@ -21,12 +21,14 @@ def add_group(username, group_name):
         user_groups = groups(username)
         if user_groups is None:
             user_groups = []
-        if group_name not in user_groups:
+        if group_name not in user_groups and check_user(username):
             conn.execute('INSERT INTO users_group (username, group_name) VALUES (?, ?)', (username, group_name))
             conn.commit()
             print(f"{username} added to {group_name}")
-        else:
+        elif group_name in user_groups:
             print(f"{username} is already a member of {group_name}")
+        else :
+            print(f"{username} is not Registered")
     except Exception as e:
         print(f"Error adding user to group: {e}")
 def register(username,password):

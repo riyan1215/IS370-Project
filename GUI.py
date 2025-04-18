@@ -5,6 +5,7 @@ import threading
 from CTkMessagebox import CTkMessagebox
 import customtkinter
 from CTkListbox import *
+from encryption import encrypt_message,decrypt_message
 HEADER = 1024
 PORT = 5051
 FORMAT = 'UTF-8'
@@ -118,12 +119,16 @@ class Chat(GUI):
                 send_message=self.category.get()+" "+og_message
             elif self.category.get() == 'All':
                 send_message="!"+" "+og_message
-            self.client.send(send_message.encode(FORMAT))
+            encrypted_msg = encrypt_message(send_message)
+            self.client.send(encrypted_msg.encode(FORMAT))
             if self.category.get()[0]=="@":
                 self.msg_list.insert(customtkinter.END, "You:"+ textwrap.fill(og_message,45))
             elif self.category.get()[0]=="#":
-                self.msg_list.insert(customtkinter.END, f"{self.category.get().removeprefix("'").removesuffix("'")} You:"+ textwrap.fill(og_message,45))
-            self.my_msg.set("")
+                category = self.category.get()
+                clean_category = category.removeprefix("'").removesuffix("'")
+                wrapped_message = textwrap.fill(og_message, 45)
+                self.msg_list.insert(customtkinter.END, f"{clean_category} You: {wrapped_message}")
+                self.my_msg.set("")
             try:
                 self.msg_list._parent_canvas.yview_moveto(1.0)
             except Exception as e:
@@ -133,6 +138,7 @@ class Chat(GUI):
         while self.thread_running:
             try:
                 message = self.client.recv(HEADER).decode(FORMAT)
+                message = decrypt_message(message)
                 if not self.window or not self.window.winfo_exists():
                     break
                 if not hasattr(self, "msg_list") or not self.msg_list.winfo_exists():
@@ -166,9 +172,9 @@ class Chat(GUI):
     def refresh_user_list(self):
         message = "/list"
         if message and self.thread_running:
+            message=encrypt_message(message)
             self.client.send(message.encode(FORMAT))
         self.window.after(5000, self.refresh_user_list)
 if __name__ == "__main__":
-   # app = Chat(customtkinter.CTk(),"riyan")
     app = Login()
     app.window.mainloop()
