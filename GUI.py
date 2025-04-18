@@ -1,9 +1,9 @@
 import hashlib
 import socket
-import textwrap
 import threading
+import time
+
 from CTkMessagebox import CTkMessagebox
-from customtkinter import filedialog
 import customtkinter
 from encryption import encrypt_message, decrypt_message
 from PIL import Image
@@ -105,14 +105,17 @@ class Chat(GUI):
         entry.pack(side=customtkinter.LEFT, padx=(10, 10), pady=(10, 10))
         send_button = customtkinter.CTkButton(master=self.frameText, text="Send", width=60, command=self.send_message, corner_radius=3)
         send_button.pack(side=customtkinter.LEFT, pady=(10, 10))
-        select_image = customtkinter.CTkButton(self.frameText2, text="Send Image", width=40, command=lambda: self.sendImage(filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])),corner_radius=3)
+        select_image = customtkinter.CTkButton(self.frameText2, text="Send Image", width=40, command=lambda: self.sendImage(customtkinter.filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])),corner_radius=3)
         select_image.pack(side=customtkinter.LEFT, fill=customtkinter.X)
         self.receive_thread = threading.Thread(target=self.receive, daemon=True)
         self.receive_thread.start()
         self.refresh_user_list()
         self.frame.pack(pady=(0, 10))
-    def send_message(self):
-        og_message = self.my_msg.get().strip()
+    def send_message(self,message=None):
+        if message is None:
+            og_message = self.my_msg.get().strip()
+        else:
+            og_message = "[Image]"
         if og_message:
             send_message = ""
             if self.category.get() != "All":
@@ -122,15 +125,14 @@ class Chat(GUI):
             encrypted_msg = encrypt_message(send_message)
             self.client.send(encrypted_msg.encode(FORMAT))
             if self.category.get()[0]=="@":
-                msg_text = "You: " + textwrap.fill(og_message, 45)
+                msg_text = "You: " + og_message
                 msg_label = customtkinter.CTkLabel(self.msg_list, text=msg_text, anchor="w", justify="left",
                                                    wraplength=300)
                 msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
             elif self.category.get()[0]=="#":
                 category = self.category.get()
                 clean_category = category.removeprefix("'").removesuffix("'")
-                wrapped_message = textwrap.fill(og_message, 45)
-                group_text = f"{clean_category} You: {wrapped_message}"
+                group_text = f"{clean_category} You: {og_message}"
                 group_label = customtkinter.CTkLabel(self.msg_list, text=group_text, anchor="w", justify="left",
                                                      wraplength=300)
                 group_label.pack(fill="x", padx=5, pady=2, anchor="w")
@@ -143,6 +145,8 @@ class Chat(GUI):
             if image:
                 with open(image, "rb") as f:
                     image_file = f.read()
+                self.send_message("[Image]")
+                time.sleep(1)
                 size_bytes = len(image_file).to_bytes(4, 'big')
                 self.client.send(encrypt_message(f"/Image {self.category.get()}").encode(FORMAT))
                 self.client.send(size_bytes)
