@@ -96,7 +96,7 @@ class Chat(GUI):
     def chat(self):
         self.frame.place(x=170, y=250)
         self.frameText.place(x=25, y=380)
-        self.frameText2.place(x=380, y=430)
+        self.frameText2.place(x=390, y=430)
         self.msg_list = customtkinter.CTkScrollableFrame(self.frame, width=400, height=350)
         self.msg_list.pack(side=customtkinter.LEFT, fill=customtkinter.BOTH)
         self.category = customtkinter.CTkOptionMenu(master=self.frameText, values=self.online_users, width=30, corner_radius=3)
@@ -105,7 +105,7 @@ class Chat(GUI):
         entry.pack(side=customtkinter.LEFT, padx=(10, 10), pady=(10, 10))
         send_button = customtkinter.CTkButton(master=self.frameText, text="Send", width=60, command=self.send_message, corner_radius=3)
         send_button.pack(side=customtkinter.LEFT, pady=(10, 10))
-        select_image = customtkinter.CTkButton(self.frameText2, text="Send Image", width=40, command=lambda: self.sendImage(filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])))
+        select_image = customtkinter.CTkButton(self.frameText2, text="Send Image", width=40, command=lambda: self.sendImage(filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])),corner_radius=3)
         select_image.pack(side=customtkinter.LEFT, fill=customtkinter.X)
         self.receive_thread = threading.Thread(target=self.receive, daemon=True)
         self.receive_thread.start()
@@ -140,17 +140,18 @@ class Chat(GUI):
             self.msg_list._parent_canvas.yview_moveto(1.0)
     def sendImage(self, image):
         try:
-            with open(image, "rb") as f:
-                image_file = f.read()
-            size_bytes = len(image_file).to_bytes(4, 'big')
-            self.client.send(encrypt_message(f"/Image {self.category.get()}").encode(FORMAT))
-            self.client.send(size_bytes)
-            self.client.sendall(image_file)
-            image_stream = BytesIO(image_file)
-            img = customtkinter.CTkImage(dark_image=Image.open(image_stream), size=(100, 100))
-            label = customtkinter.CTkLabel(self.msg_list, image=img, text="")
-            label.image = img
-            label.pack(padx=5, pady=5, anchor="w")
+            if image:
+                with open(image, "rb") as f:
+                    image_file = f.read()
+                size_bytes = len(image_file).to_bytes(4, 'big')
+                self.client.send(encrypt_message(f"/Image {self.category.get()}").encode(FORMAT))
+                self.client.send(size_bytes)
+                self.client.sendall(image_file)
+                image_stream = BytesIO(image_file)
+                img = customtkinter.CTkImage(dark_image=Image.open(image_stream), size=(100, 100))
+                label = customtkinter.CTkLabel(self.msg_list, image=img, text="")
+                label.image = img
+                label.pack(padx=5, pady=5, anchor="w")
         except Exception as e:
             print("sendImage:", e)
     def receiveImage(self):
