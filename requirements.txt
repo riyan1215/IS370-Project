@@ -1,4 +1,2 @@
-ctklistbox==1.5
-CTkMessagebox==2.7
 CTkMessagebox==2.7
 customtkinter==5.2.2
