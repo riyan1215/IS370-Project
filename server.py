@@ -1,11 +1,10 @@
-import copy
 import os
 import socket
 import threading
 from datetime import datetime
 
-from database import check_user, login, group_members, groups
-from encryption import encrypt_message, decrypt_message
+from utility.database import check_user, login, group_members, groups
+from utility.encryption import encrypt_message, decrypt_message
 
 HEADER = 1024
 PORT = 5051

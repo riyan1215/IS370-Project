@@ -1,7 +1,7 @@
 from cryptography.fernet import Fernet
 import os
 
-KEY_FILE = "secret.key"
+KEY_FILE = "../secret.key"
 
 if not os.path.exists(KEY_FILE):
     with open(KEY_FILE, "wb") as f:

@@ -1,7 +1,7 @@
 import hashlib
 import sqlite3
 
-conn = sqlite3.connect('user.db', check_same_thread=False)
+conn = sqlite3.connect('../user.db', check_same_thread=False)
 cursor = conn.cursor()
 conn.execute('''
              CREATE TABLE IF NOT EXISTS users
@@ -29,22 +29,26 @@ def add_user_to_group(username, group_name):
             conn.execute('INSERT INTO users_group (username, group_name) VALUES (?, ?)', (username, group_name))
             conn.commit()
             print(f"{username} added to {group_name}")
+            return True
         elif group_name in user_groups:
             print(f"{username} is already a member of {group_name}")
+            return False
         else:
             print(f"{username} is not Registered")
+            return False
     except Exception as e:
         print(f"Error adding user to group: {e}")
+        return False
 
 
 def register(username, password):
     try:
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        cursor.execute('insert into users(username,password) values(?,?)', (username, hashed_password))
+        cursor.execute('insert into users(username,password) values(?,?)', (username, password))
         conn.commit()
-        print("Registered successfully")
+        return True
     except Exception as e:
         print("Registration failed " + str(e))
+        return False
 
 
 def login(username, password):
@@ -77,6 +81,13 @@ def group_members(group_name):
     members = [member[0] for member in db_members]
     print(members)
     return members
+def group_list():
+    db_members = cursor.execute('SELECT Distinct group_name FROM users_group', ()).fetchall()
+    if db_members:
+        members = [member[0] for member in db_members]
+        return members
+    return []
+
 
 
 conn.commit()

@@ -10,7 +10,7 @@ import customtkinter
 from CTkMessagebox import CTkMessagebox
 from PIL import Image
 
-from encryption import encrypt_message, decrypt_message
+from utility.encryption import encrypt_message, decrypt_message
 #Config
 HEADER = 1024
 PORT = 5051
