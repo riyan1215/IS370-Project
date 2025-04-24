@@ -103,51 +103,82 @@ def multicast(sender, group, msg):
             log_message("multicast", sender, group, msg)
 
 
-def image(conn, sender, route):
+def send_image(share_message,size_bytes,image_path,sender,route=None,received=None):
+    with client_lock:
+        client_local = clients.copy()
+    if route and route.startswith("@"):
+        user = route[1:]
+        if user in client_local:
+            client_local[user].sendall(share_message)
+            client_local[user].sendall(size_bytes)
+            for i in range(0, len(received), HEADER):
+                client_local[user].sendall(received[i:i + HEADER])
+            log_message("unicast", sender, user, f"[Image] {image_path}")
+    elif route and route.startswith("#"):
+        group = route[1:]
+        members = group_members(group)
+        for user in members:
+            if user != sender and user in client_local:
+                client_local[user].sendall(share_message)
+                client_local[user].sendall(size_bytes)
+                for i in range(0, len(received), HEADER):
+                    client_local[user].sendall(received[i:i + HEADER])
+
+        log_message("multicast", sender, group, f"[Image] {image_path}")
+    elif route and route.startswith("All"):
+        for user in client_local:
+            if user != sender:
+                client_local[user].sendall(share_message)
+                client_local[user].sendall(size_bytes)
+                for i in range(0, len(received), HEADER):
+                    client_local[user].sendall(received[i:i + HEADER])
+
+        log_message("broadcast", sender, "ALL", f"[Image] {image_path}")
+    else:
+        if sender in client_local:
+            client_local[sender].sendall(size_bytes)
+            for i in range(0, len(received), HEADER):
+                client_local[sender].sendall(received[i:i + HEADER])
+
+
+def image(conn, sender, route=None, image_path=None):
     try:
-        # Receive 4 bytes for size (not encoded/encrypted)
-        size_bytes = conn.recv(4)
-        size = int.from_bytes(size_bytes, 'big')
-        # Receive image data
-        received = b""
-        while len(received) < size:
-            chunk = conn.recv(min(size - len(received), HEADER))
-            if not chunk:
-                break
-            received += chunk
-        # Save image
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         os.makedirs("logs/images", exist_ok=True)
-        image_path = f"logs/images/{sender}_{timestamp}.jpg"
-        with open(image_path, "wb") as f:
-            with log_lock:
-                f.write(received)
-        share_message = encrypt_message(f"/Image:").encode(FORMAT)
-        with client_lock:
-            client_local = copy.deepcopy(clients)
-        if route.startswith("@"):
-            target = route[1:]
-            if target in client_local:
-                client_local[target].sendall(share_message)
-                client_local[target].sendall(size_bytes)
-                client_local[target].sendall(received)
-                log_message("unicast", sender, target, f"[Image] {image_path}")
-        elif route.startswith("#"):
-            group = route[1:]
-            members = group_members(group)
-            for user in members:
-                if user != sender and user in client_local:
-                    client_local[user].sendall(share_message)
-                    client_local[user].sendall(size_bytes)
-                    client_local[user].sendall(received)
-            log_message("multicast", sender, group, f"[Image] {image_path}")
-        elif route.startswith("All"):
-            for user in client_local:
-                if user != sender:
-                    client_local[user].sendall(share_message)
-                    client_local[user].sendall(size_bytes)
-                    client_local[user].sendall(received)
-            log_message("broadcast", sender, "ALL", f"[Image] {image_path}")
+        print(image_path)
+        if route:
+            # Receive 4 bytes for size
+            size_bytes = conn.recv(4)
+            size = int.from_bytes(size_bytes, 'big')
+            # Receive image data
+            received = b""
+            while len(received) < size:
+                chunk = conn.recv(min(size - len(received), HEADER))
+                if not chunk:
+                    break
+                received += chunk
+            # Save image
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            image_path = f"logs/images/{sender}_{timestamp}.jpg"
+            
+            # Write the file in a single operation with write mode
+            with open(image_path, "wb") as f:
+                with log_lock:
+                    f.write(received)
+            share_message = encrypt_message('/Image:').encode(FORMAT)
+
+        else:
+            print(image_path)
+            if not os.path.exists(image_path):
+                raise FileNotFoundError(f"Image file not found: {image_path}")
+
+            with open(image_path, "rb") as f:
+                with log_lock:
+                    received = f.read()
+            size_bytes = len(received).to_bytes(4, 'big')
+            share_message=None
+
+        send_image(route=route, share_message=share_message, size_bytes=size_bytes,
+                   received=received, image_path=image_path, sender=sender)
     except Exception as e:
         print("Image error:", e)
 
@@ -181,6 +212,11 @@ def handle_client(conn, addr):
                 elif msg[0] == "#":
                     group, msg = msg[1:].split(" ", 1)
                     multicast(user, group, msg)
+                elif msg.startswith("/img_log"):
+                    _,path=msg.split(" ")
+                    image(conn,user,image_path=path)
+
+
                 elif msg.startswith("/get_history"):
                     # Example usage: /get_history unicast otheruser
                     parts = msg.split()

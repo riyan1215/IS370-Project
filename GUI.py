@@ -147,8 +147,6 @@ class Chat(GUI):
     def send_message(self, message=None):
         if message is None:
             og_message = self.my_msg.get().strip()
-        else:
-            og_message = "[Image]"
         if og_message:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             clean_category = self.category.get().removeprefix("'").removesuffix("'")
@@ -201,6 +199,8 @@ class Chat(GUI):
             size_bytes = self.client.recv(4)  # receives the size of the image
             size = int.from_bytes(size_bytes, 'big')
             received = b""
+            print(size)
+
             while len(received) < size:
                 chunk = self.client.recv(min(size - len(received), HEADER))
                 if not chunk:
@@ -285,15 +285,39 @@ class Chat(GUI):
         self.request_history(history_type, identifier)
 
     def history_receive(self):
-        bytes_chunks = int.from_bytes(self.client.recv(4), 'big')
-        received = b""
-        while len(received) < bytes_chunks:  # receives in chunks
-            received += self.client.recv(min(bytes_chunks - len(received), HEADER))
-        history = decrypt_message(received.decode(FORMAT))
-        for line in history.splitlines():
-            with self.msg_list_lock:
-                msg_label = customtkinter.CTkLabel(self.msg_list, text=line, anchor="w", justify="left", wraplength=300)
-                msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
+        try:
+            bytes_chunks = int.from_bytes(self.client.recv(4), 'big')
+            received = b""
+            while len(received) < bytes_chunks:
+                chunk = self.client.recv(min(bytes_chunks - len(received), HEADER))
+                received += chunk
+
+            _ = self.client.recv(HEADER)
+
+            try:
+                history = decrypt_message(received.decode(FORMAT))
+            except Exception as e:
+                print(f"Error decrypting: {e}")
+                return
+
+            for line in history.splitlines():
+                if " :: [Image]" in line:
+                    try:
+                        path_part = line.split(" :: [Image]")[1]
+                        image_path = path_part.lstrip()
+                        self.client.sendall(encrypt_message("/img_log " + image_path).encode(FORMAT))
+                        self.receive_image()
+                    except Exception as e:
+                        print(f"Error processing image '{line}': {e}")
+                    continue
+
+
+                with self.msg_list_lock:
+                    msg_label = customtkinter.CTkLabel(self.msg_list, text=line, anchor="w", justify="left", wraplength=300)
+                    msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
+
+        except Exception as e:
+            print(f"Unexpected error: {e}")
 
 
 if __name__ == "__main__":
