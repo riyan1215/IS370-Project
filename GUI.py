@@ -243,7 +243,7 @@ class Chat(GUI):
 
     def update_user_list(self, online_users):
         users = online_users.split("\n")
-        users.remove("@" + self.username)  # so that the user doesn't send to himself
+        users.remove("@" + self.username)  # so that the user doesn't send it to himself
         updated_users = ["All"] + [user.strip() for user in users if user.strip()]
         current_user = self.category.get()
         self.online_users = updated_users
@@ -263,7 +263,7 @@ class Chat(GUI):
         self.client.sendall(encrypted.encode(FORMAT))
 
     def on_category_change(self, selected):
-        # Clear current chat display
+        # Clear the current chat display
         with self.msg_list_lock:
             for widget in self.msg_list.winfo_children():
                 widget.destroy()
