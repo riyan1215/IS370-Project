@@ -1,23 +1,35 @@
-import hashlib
+import os
 import sqlite3
 
-conn = sqlite3.connect('../user.db', check_same_thread=False)
-cursor = conn.cursor()
-conn.execute('''
-             CREATE TABLE IF NOT EXISTS users
-             (
-                 username TEXT PRIMARY KEY,
-                 password TEXT NOT NULL
-             )
-             ''')
-conn.execute('''
-             CREATE TABLE IF NOT EXISTS users_group
-             (
-                 username   TEXT,
-                 group_name TEXT,
-                 FOREIGN KEY (username) REFERENCES users (username)
-             )
-             ''')
+
+def init_database(db_path='user.db'):
+    # Make sure the directory exists
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+
+    # Create global connection and cursor
+    global conn, cursor
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    cursor = conn.cursor()
+
+    # Initialize tables
+    conn.execute('''
+                 CREATE TABLE IF NOT EXISTS users
+                 (
+                     username TEXT PRIMARY KEY,
+                     password TEXT NOT NULL
+                 )
+                 ''')
+    conn.execute('''
+                 CREATE TABLE IF NOT EXISTS users_group
+                 (
+                     username   TEXT,
+                     group_name TEXT,
+                     FOREIGN KEY (username) REFERENCES users (username)
+                 )
+                 ''')
+    conn.commit()
 
 
 def add_user_to_group(username, group_name):
@@ -90,4 +102,4 @@ def group_list():
 
 
 
-conn.commit()
+init_database()

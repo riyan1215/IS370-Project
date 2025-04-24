@@ -65,16 +65,14 @@ def authenticate(conn):
 
 
 def unicast(sender, receiver, msg):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # it's not really accurate, but it's good enough
-    with client_lock:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with client_lock: #Lock for thread safety
         client_local = clients.copy()
 
     if receiver in client_local:
         full_msg = f"[{timestamp}] {sender} ➔ {receiver} :: {msg}"
         clients[receiver].sendall(encrypt_message(full_msg).encode(FORMAT))
         log_message("unicast", sender, receiver, msg)
-    else:
-        print("user is not connected")
 
 
 def broadcast(sender, msg):
