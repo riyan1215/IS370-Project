@@ -144,7 +144,6 @@ def send_image(share_message,size_bytes,image_path,sender,route=None,received=No
 def image(conn, sender, route=None, image_path=None):
     try:
         os.makedirs("logs/images", exist_ok=True)
-        print(image_path)
         if route:
             # Receive 4 bytes for size
             size_bytes = conn.recv(4)
@@ -167,7 +166,6 @@ def image(conn, sender, route=None, image_path=None):
             share_message = encrypt_message('/Image:').encode(FORMAT)
 
         else:
-            print(image_path)
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found: {image_path}")
 

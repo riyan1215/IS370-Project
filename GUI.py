@@ -144,9 +144,8 @@ class Chat(GUI):
         self.receive_thread.start()
         self.frame.pack(pady=(0, 10))
 
-    def send_message(self, message=None):
-        if message is None:
-            og_message = self.my_msg.get().strip()
+    def send_message(self):
+        og_message = self.my_msg.get().strip()
         if og_message:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             clean_category = self.category.get().removeprefix("'").removesuffix("'")
@@ -179,7 +178,6 @@ class Chat(GUI):
             if image:
                 with open(image, "rb") as f:
                     image_file = f.read()
-                self.send_message("[Image]")
                 time.sleep(1)
                 size_bytes = len(image_file).to_bytes(4, 'big')
                 self.client.sendall(encrypt_message(f"/Image {self.category.get()}").encode(FORMAT))
@@ -199,7 +197,6 @@ class Chat(GUI):
             size_bytes = self.client.recv(4)  # receives the size of the image
             size = int.from_bytes(size_bytes, 'big')
             received = b""
-            print(size)
 
             while len(received) < size:
                 chunk = self.client.recv(min(size - len(received), HEADER))
