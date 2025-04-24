@@ -247,9 +247,12 @@ class Chat(GUI):
 
             except Exception as e:
                 if self.thread_running:
-                    print(f"An error occurred: {e}")
-
-                self.on_exit()
+                    error=CTkMessagebox(title="Connection Error",
+                                  message="A connection error occurred.",
+                                  icon="cancel")
+                    if error.get() == "OK":
+                        self.on_exit()
+                        break
                 break
 
     def update_user_list(self, online_users):
