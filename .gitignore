@@ -1,4 +1,4 @@
 /.idea/
-/secret.key
+/utility/secret.key
 /logs/
 /user.db
