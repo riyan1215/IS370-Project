@@ -46,22 +46,22 @@ def authenticate(conn):
         username = conn.recv(HEADER).decode()
         username_check = check_user(username)
         if username_check:
-            conn.sendall(b"200")  # correct username
+            conn.sendall(b"200")  # Correct username
             password = conn.recv(HEADER).decode()
             check_password = login(username, password)
             with client_lock:
                 if check_password and username not in clients.keys():
-                    conn.sendall(b"200")  # correct password
+                    conn.sendall(b"200")  # Correct password
                     clients[username] = conn
                     return username
                 elif username in clients.keys():
                     conn.sendall(b"409")  # "409 stands for conflict", already logged in
                     continue
                 else:
-                    conn.sendall(b"401")  # incorrect password or already logged in
+                    conn.sendall(b"401")  # Incorrect password or already logged in
                     continue
         else:
-            conn.sendall(b"404")  # incorrect username
+            conn.sendall(b"404")  # Incorrect username
 
 
 def unicast(sender, receiver, msg):
@@ -93,7 +93,7 @@ def multicast(sender, group, msg):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_msg = f"[{timestamp}] {sender} ➔ GROUP [{group}] :: {msg}"
-    group_names = group_members(group)
+    group_names = group_members(group) # Returns the Group Members in the database
     for user in group_names:
         if user != sender and user in client_local:
             clients[user].sendall(encrypt_message(full_msg).encode(FORMAT))
@@ -142,21 +142,17 @@ def image(conn, sender, route=None, image_path=None):
     try:
         os.makedirs("logs/images", exist_ok=True)
         if route:
-            # Receive 4 bytes for size
             size_bytes = conn.recv(4)
             size = int.from_bytes(size_bytes, 'big')
-            # Receive image data
             received = b""
-            while len(received) < size:
+            while len(received) < size: #receive data in chunks
                 chunk = conn.recv(min(size - len(received), HEADER))
                 if not chunk:
                     break
                 received += chunk
-            # Save image
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             image_path = f"logs/images/{sender}_{timestamp}.jpg"
             
-            # Write the file in a single operation with write mode
             with open(image_path, "wb") as f:
                 with log_lock:
                     f.write(received)

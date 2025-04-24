@@ -34,7 +34,7 @@ class GUI:
                 hello = CTkMessagebox(title="Connection Error",
                                       message="Make sure that the server is running and the port is open, and then try again",
                                       icon="cancel")
-                if hello.get() == "OK":
+                if hello.get() == "OK": # so that it's exits when the user presses OK
                     sys.exit()
         else:
             self.client = client
@@ -236,9 +236,20 @@ class Chat(GUI):
                                                               wraplength=300)
                             msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
                     self.msg_list._parent_canvas.yview_moveto(1.0)
+            except ConnectionResetError as e:
+                if self.thread_running:
+                    error=CTkMessagebox(title="Connection Error",
+                                  message="Connection to the server has been lost.",
+                                  icon="cancel")
+                    if error.get() == "OK":
+                        self.on_exit()
+                        break
+
             except Exception as e:
                 if self.thread_running:
                     print(f"An error occurred: {e}")
+
+                self.on_exit()
                 break
 
     def update_user_list(self, online_users):
