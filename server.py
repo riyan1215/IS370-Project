@@ -1,3 +1,4 @@
+import copy
 import os
 import socket
 import threading
@@ -14,28 +15,31 @@ FORMAT = 'UTF-8'
 DISCONNECT_MESSAGE = "/DISCONNECT"
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
+client_lock=threading.Lock()
+log_lock=threading.Lock()
 clients = {}  # user-->connection
 
 
 def log_message(log_type, sender, receiver_or_group, message):
-    os.makedirs("logs/unicast", exist_ok=True)
-    os.makedirs("logs/multicast", exist_ok=True)
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if log_type == "unicast":
-        sorted_users = sorted([sender, receiver_or_group])
-        filename = f"unicast/{sorted_users[0]}_{sorted_users[1]}.txt"
-        log_line = f"[{timestamp}] {sender} ➔ {receiver_or_group} :: {message}"
-    elif log_type == "broadcast":
-        filename = "broadcast.txt"
-        log_line = f"[{timestamp}] {sender} ➔ ALL :: {message}"
-    elif log_type == "multicast":
-        filename = f"multicast/{receiver_or_group}.txt"
-        log_line = f"[{timestamp}] {sender} ➔ GROUP [{receiver_or_group}] :: {message}"
-    else:
-        return
+    with log_lock:
+        os.makedirs("logs/unicast", exist_ok=True)
+        os.makedirs("logs/multicast", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if log_type == "unicast":
+            sorted_users = sorted([sender, receiver_or_group])
+            filename = f"unicast/{sorted_users[0]}_{sorted_users[1]}.txt"
+            log_line = f"[{timestamp}] {sender} ➔ {receiver_or_group} :: {message}"
+        elif log_type == "broadcast":
+            filename = "broadcast.txt"
+            log_line = f"[{timestamp}] {sender} ➔ ALL :: {message}"
+        elif log_type == "multicast":
+            filename = f"multicast/{receiver_or_group}.txt"
+            log_line = f"[{timestamp}] {sender} ➔ GROUP [{receiver_or_group}] :: {message}"
+        else:
+            return
 
-    with open(f"logs/{filename}", "a", encoding="utf-8") as f:
-        f.write(log_line + "\n")
+        with open(f"logs/{filename}", "a", encoding="utf-8") as f:
+            f.write(log_line + "\n")
 
 
 def authenticate(conn):
@@ -46,23 +50,27 @@ def authenticate(conn):
             conn.sendall(b"200")  # correct username
             password = conn.recv(HEADER).decode()
             check_password = login(username, password)
-            if check_password and username not in clients.keys():
-                conn.sendall(b"200")  # correct password
-                clients[username] = conn
-                return username
-            elif username in clients.keys():
-                conn.sendall(b"409")  # "409 stands for conflict", already logged in
-                continue
-            else:
-                conn.sendall(b"401")  # incorrect password or already logged in
-                continue
+            with client_lock:
+                if check_password and username not in clients.keys():
+                    conn.sendall(b"200")  # correct password
+                    clients[username] = conn
+                    return username
+                elif username in clients.keys():
+                    conn.sendall(b"409")  # "409 stands for conflict", already logged in
+                    continue
+                else:
+                    conn.sendall(b"401")  # incorrect password or already logged in
+                    continue
         else:
             conn.sendall(b"404")  # incorrect username
 
 
 def unicast(sender, receiver, msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # it's not really accurate, but it's good enough
-    if receiver in clients:
+    with client_lock:
+        client_local = clients.copy()
+
+    if receiver in client_local:
         full_msg = f"[{timestamp}] {sender} ➔ {receiver} :: {msg}"
         clients[receiver].sendall(encrypt_message(full_msg).encode(FORMAT))
         log_message("unicast", sender, receiver, msg)
@@ -71,20 +79,26 @@ def unicast(sender, receiver, msg):
 
 
 def broadcast(sender, msg):
+    with client_lock:
+        client_local=clients.copy()
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_msg = f"[{timestamp}] {sender} ➔ ALL :: {msg}"
-    for client in clients:
+    for client in client_local:
         if client is not sender:
             clients[client].sendall(encrypt_message(full_msg).encode(FORMAT))
     log_message("broadcast", sender, "ALL", msg)
 
 
 def multicast(sender, group, msg):
+    with client_lock:
+        client_local=clients.copy()
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     full_msg = f"[{timestamp}] {sender} ➔ GROUP [{group}] :: {msg}"
     group_names = group_members(group)
     for user in group_names:
-        if user != sender and user in clients:
+        if user != sender and user in client_local:
             clients[user].sendall(encrypt_message(full_msg).encode(FORMAT))
             log_message("multicast", sender, group, msg)
 
@@ -106,30 +120,33 @@ def image(conn, sender, route):
         os.makedirs("logs/images", exist_ok=True)
         image_path = f"logs/images/{sender}_{timestamp}.jpg"
         with open(image_path, "wb") as f:
-            f.write(received)
+            with log_lock:
+                f.write(received)
         share_message = encrypt_message(f"/Image:").encode(FORMAT)
+        with client_lock:
+            client_local = copy.deepcopy(clients)
         if route.startswith("@"):
             target = route[1:]
-            if target in clients:
-                clients[target].sendall(share_message)
-                clients[target].sendall(size_bytes)
-                clients[target].sendall(received)
+            if target in client_local:
+                client_local[target].sendall(share_message)
+                client_local[target].sendall(size_bytes)
+                client_local[target].sendall(received)
                 log_message("unicast", sender, target, f"[Image] {image_path}")
         elif route.startswith("#"):
             group = route[1:]
             members = group_members(group)
             for user in members:
-                if user != sender and user in clients:
-                    clients[user].sendall(share_message)
-                    clients[user].sendall(size_bytes)
-                    clients[user].sendall(received)
+                if user != sender and user in client_local:
+                    client_local[user].sendall(share_message)
+                    client_local[user].sendall(size_bytes)
+                    client_local[user].sendall(received)
             log_message("multicast", sender, group, f"[Image] {image_path}")
         elif route.startswith("All"):
-            for user in clients:
+            for user in client_local:
                 if user != sender:
-                    clients[user].sendall(share_message)
-                    clients[user].sendall(size_bytes)
-                    clients[user].sendall(received)
+                    client_local[user].sendall(share_message)
+                    client_local[user].sendall(size_bytes)
+                    client_local[user].sendall(received)
             log_message("broadcast", sender, "ALL", f"[Image] {image_path}")
     except Exception as e:
         print("Image error:", e)
@@ -183,7 +200,8 @@ def handle_client(conn, addr):
                     try:
                         if os.path.exists(log_file):
                             with open(log_file, "r", encoding="utf-8") as f:
-                                history_content = f.read()
+                                with log_lock:
+                                    history_content = f.read()
                                 # Split in parts if too long for one send, else send whole file
                                 # Split and send in chunks
                                 conn.sendall(encrypt_message(f"/history:").encode(FORMAT))
@@ -201,9 +219,7 @@ def handle_client(conn, addr):
                     except Exception as e:
                         conn.sendall(encrypt_message(f"Server error: {e}").encode(FORMAT))
         except Exception as e:
-            import traceback
             print(f"[ERROR] Exception with user {user}: {e}")
-            traceback.print_exc()
         finally:
             print(f"[{user}] Disconnected")
             if user in clients:
@@ -215,8 +231,10 @@ def handle_client(conn, addr):
 
 
 def list_refresh():
-    user_list = [f"@{u}" for u in clients.keys()]
-    for user, conn in clients.items():
+    with client_lock:
+        client_copy=clients.copy()
+    user_list = [f"@{u}" for u in client_copy.keys()]
+    for user, conn in client_copy.items():
         user_groups = groups(user)
         group_list = ["#" + g for g in user_groups] if user_groups else []
         combined = "\n".join(user_list + group_list)

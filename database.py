@@ -20,7 +20,7 @@ conn.execute('''
              ''')
 
 
-def add_group(username, group_name):
+def add_user_to_group(username, group_name):
     try:
         user_groups = groups(username)
         if user_groups is None:

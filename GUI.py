@@ -11,13 +11,14 @@ from CTkMessagebox import CTkMessagebox
 from PIL import Image
 
 from encryption import encrypt_message, decrypt_message
-
+#Config
 HEADER = 1024
 PORT = 5051
 FORMAT = 'UTF-8'
 DISCONNECT_MESSAGE = "/DISCONNECT"
 SERVER = "127.0.0.1"
 ADDR = (SERVER, PORT)
+#Colors
 RED_COLOR = "\033[91m"
 
 
@@ -116,6 +117,7 @@ class Chat(GUI):
         self.receive_thread = None
         self.my_msg = customtkinter.StringVar()
         self.chat()
+        self.msg_list_lock = threading.Lock()
 
     def chat(self):
         self.frame.place(x=170, y=250)
@@ -124,9 +126,10 @@ class Chat(GUI):
         self.msg_list = customtkinter.CTkScrollableFrame(self.frame, width=400, height=350)
         self.msg_list.pack(side=customtkinter.LEFT, fill=customtkinter.BOTH)
         self.category = customtkinter.CTkOptionMenu(master=self.frameText, values=self.online_users, width=30,
-                                                    corner_radius=3)
-        self.category.configure(command=self.on_category_change)
+                                                    corner_radius=3,command=self.on_category_change,)
         self.category.pack(side=customtkinter.LEFT, fill=customtkinter.X)
+        self.window.after(100, lambda: self.on_category_change(self.category.get())) #for the first selection
+
         entry = customtkinter.CTkEntry(master=self.frameText, textvariable=self.my_msg, width=300,
                                        placeholder_text="Type a message")
         entry.pack(side=customtkinter.LEFT, padx=(10, 10), pady=(10, 10))
@@ -155,23 +158,19 @@ class Chat(GUI):
             elif self.category.get() == 'All':  # Broadcast
                 send_message = "!" + " " + og_message
                 chat = f"[{timestamp}] {self.username} ➔ ALL :: {og_message}"
-                msg_label = customtkinter.CTkLabel(self.msg_list, text=chat, anchor="w", justify="left",
+                with self.msg_list_lock:
+                    msg_label = customtkinter.CTkLabel(self.msg_list, text=chat, anchor="w", justify="left",
                                                    wraplength=300)
-                msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
+                    msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
 
             encrypted_msg = encrypt_message(send_message)
             self.client.sendall(encrypted_msg.encode(FORMAT))
-            if self.category.get()[0] == "@":  # Unicast
-                chat = f"[{timestamp}] {self.username} ➔ {clean_category[1:]} :: {og_message}"
-
-                msg_label = customtkinter.CTkLabel(self.msg_list, text=chat, anchor="w", justify="left",
+            if self.category.get()[0] == "@" or self.category.get()[0]=="#":  # Unicast and Multicast
+                chat = f"[{timestamp}] {self.username} ➔ {'GROUP' if self.category.get()[0]=='#' else ''} {clean_category[1:]} :: {og_message}"
+                with self.msg_list_lock:
+                    msg_label = customtkinter.CTkLabel(self.msg_list, text=chat, anchor="w", justify="left",
                                                    wraplength=300)
-                msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
-            elif self.category.get()[0] == "#":  # Multicast
-                chat = f"[{timestamp}] {self.username} ➔ GROUP [{clean_category[1:]}] :: {og_message}"
-                group_label = customtkinter.CTkLabel(self.msg_list, text=chat, anchor="w", justify="left",
-                                                     wraplength=300)
-                group_label.pack(fill="x", padx=5, pady=2, anchor="w")
+                    msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
 
             self.my_msg.set("")
             self.msg_list.update_idletasks()
@@ -234,9 +233,11 @@ class Chat(GUI):
                     elif message.startswith("/history_end") or message.startswith("/history_error"):
                         pass
                     else:
-                        msg_label = customtkinter.CTkLabel(self.msg_list, text=message, anchor="w", justify="left",
-                                                           wraplength=300)
-                        msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
+                        with self.msg_list_lock:
+                            msg_label = customtkinter.CTkLabel(self.msg_list, text=message, 
+                                                              anchor="w", justify="left",
+                                                              wraplength=300)
+                            msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
                     self.msg_list._parent_canvas.yview_moveto(1.0)
             except Exception as e:
                 if self.thread_running:
@@ -266,8 +267,10 @@ class Chat(GUI):
 
     def on_category_change(self, selected):
         # Clear current chat display
-        for widget in self.msg_list.winfo_children():
-            widget.destroy()
+        with self.msg_list_lock:
+            for widget in self.msg_list.winfo_children():
+                widget.destroy()
+        self.msg_list._parent_canvas.yview_moveto(0.0)
 
         if selected == "All":
             history_type = "broadcast"
@@ -288,8 +291,9 @@ class Chat(GUI):
             received += self.client.recv(min(bytes_chunks - len(received), HEADER))
         history = decrypt_message(received.decode(FORMAT))
         for line in history.splitlines():
-            msg_label = customtkinter.CTkLabel(self.msg_list, text=line, anchor="w", justify="left", wraplength=300)
-            msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
+            with self.msg_list_lock:
+                msg_label = customtkinter.CTkLabel(self.msg_list, text=line, anchor="w", justify="left", wraplength=300)
+                msg_label.pack(fill="x", padx=5, pady=2, anchor="w")
 
 
 if __name__ == "__main__":
